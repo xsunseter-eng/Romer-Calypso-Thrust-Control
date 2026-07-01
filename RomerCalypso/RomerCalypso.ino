@@ -17,6 +17,9 @@ Servo escRight;
 bool isCommandActive = false;
 unsigned long commandEndTime = 0;
 
+// Serial parsing buffer
+String serialBuffer = "";
+
 void setup() {
   Serial.begin(115200);
   
@@ -36,13 +39,17 @@ void loop() {
     Serial.println("Command duration expired. Engines stopped.");
   }
   
-  // Parse incoming commands
-  if (Serial.available() > 0) {
-    String command = Serial.readStringUntil('\n');
-    command.trim();
-    
-    if (command.length() > 0) {
-      processCommand(command);
+  // Non-blocking serial read
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == '\n') {
+      serialBuffer.trim();
+      if (serialBuffer.length() > 0) {
+        processCommand(serialBuffer);
+      }
+      serialBuffer = ""; // Reset buffer
+    } else {
+      serialBuffer += c;
     }
   }
 }
@@ -71,9 +78,13 @@ void processCommand(String cmd) {
       unsigned long duration = cmd.substring(comma4 + 1).toInt();
 
       power = constrain(power, 0, 100);
+      
+      // Calculate PWM signal: 1500 is neutral. 
+      // Basic ESC limits: 1100 (full reverse) to 1900 (full forward).
+      // power (0-100) * 4 maps to (0-400), fitting safely within limits.
       int signal = 1500;
-      if (dir == "F") signal = 1500 + (power * 5);
-      else if (dir == "R") signal = 1500 - (power * 5);
+      if (dir == "F") signal = 1500 + (power * 4);
+      else if (dir == "R") signal = 1500 - (power * 4);
 
       if (motor == "L") escLeft.writeMicroseconds(signal);
       else if (motor == "R") escRight.writeMicroseconds(signal);
